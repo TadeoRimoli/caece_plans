@@ -1,155 +1,203 @@
-import type React from "react"
+import { memo, useMemo } from "react"
 import type { Subject, NodePosition } from "../types"
+import { STATUS_META } from "../types"
 
 interface ConnectionLinesProps {
   subjects: Subject[]
-  nodePositions: Record<number, NodePosition>
-  hoveredSubject: number | null
+  nodePositions: Record<string, NodePosition>
+  hoveredSubject: string | null
 }
 
-const ConnectionLines: React.FC<ConnectionLinesProps> = ({ subjects, nodePositions, hoveredSubject }) => {
-  // Calcular el área total del SVG
-  const maxX = Math.max(...Object.values(nodePositions).map((pos) => pos.x)) + 200
-  const maxY = Math.max(...Object.values(nodePositions).map((pos) => pos.y)) + 200
+const ConnectionLines = memo(({ subjects, nodePositions, hoveredSubject }: ConnectionLinesProps) => {
+  // Build subject index map for O(1) lookups (Rule 7.2)
+  const subjectByCode = useMemo(() => {
+    const map = new Map<string, Subject>()
+    for (const subject of subjects) {
+      map.set(subject.code, subject)
+    }
+    return map
+  }, [subjects])
 
-  // Función para detectar si una línea pasa cerca de un nodo
-  const avoidsNode = (startX: number, startY: number, endX: number, endY: number, nodePos: NodePosition) => {
-    const nodeLeft = nodePos.x - 110
-    const nodeRight = nodePos.x + 110
-    const nodeTop = nodePos.y - 50
-    const nodeBottom = nodePos.y + 50
+  // Calculate SVG dimensions - use loop for min/max instead of spread (Rule 7.10)
+  const { maxX, maxY } = useMemo(() => {
+    const positions = Object.values(nodePositions)
+    if (positions.length === 0) return { maxX: 800, maxY: 600 }
+    
+    // Use loop for O(n) instead of spread which can be slower for large arrays
+    let maxX = positions[0].x
+    let maxY = positions[0].y
+    for (let i = 1; i < positions.length; i++) {
+      if (positions[i].x > maxX) maxX = positions[i].x
+      if (positions[i].y > maxY) maxY = positions[i].y
+    }
+    
+    return {
+      maxX: maxX + 300,
+      maxY: maxY + 300,
+    }
+  }, [nodePositions])
 
-    // Si la línea está completamente fuera del área del nodo, no hay problema
-    if (
-      endX < nodeLeft ||
-      startX > nodeRight ||
-      Math.max(startY, endY) < nodeTop ||
-      Math.min(startY, endY) > nodeBottom
-    ) {
-      return { avoids: true, offset: 0 }
+  // Pre-calculate all paths - only recalc when positions change, not hover
+  const paths = useMemo(() => {
+    const result: Array<{
+      key: string
+      pathData: string
+      lineColor: string
+      subjectCode: string
+      prereqId: string
+    }> = []
+
+    for (const subject of subjects) {
+      const subjectPos = nodePositions[subject.code]
+      if (!subjectPos) continue
+
+      for (const prereqId of subject.prerequisites) {
+        const prereqPos = nodePositions[prereqId]
+        if (!prereqPos) continue
+
+        // Use Map for O(1) lookup instead of O(n) find() (Rule 7.2)
+        const prereqSubject = subjectByCode.get(prereqId)
+        const lineColor = prereqSubject 
+          ? STATUS_META[prereqSubject.status].color 
+          : "#475569"
+
+        // Calculate connection points
+        const sourceX = subjectPos.x - 145
+        const sourceY = subjectPos.y
+        const targetX = prereqPos.x + 145
+        const targetY = prereqPos.y
+
+        // Simple bezier curve
+        const controlX1 = sourceX - 60
+        const controlX2 = targetX + 60
+        const pathData = `M ${sourceX} ${sourceY} C ${controlX1} ${sourceY}, ${controlX2} ${targetY}, ${targetX} ${targetY}`
+
+        result.push({
+          key: `${prereqId}-${subject.code}`,
+          pathData,
+          lineColor,
+          subjectCode: subject.code,
+          prereqId,
+        })
+      }
     }
 
-    // Si pasa por el área del nodo, calcular offset para evitarlo
-    const centerY = (startY + endY) / 2
-    const nodeCenter = nodePos.y
+    return result
+  }, [subjects, nodePositions, subjectByCode])
 
-    if (centerY > nodeCenter) {
-      // Pasar por debajo
-      return { avoids: false, offset: 60 }
-    } else {
-      // Pasar por arriba
-      return { avoids: false, offset: -60 }
+  // Create Set for O(1) lookup of highlighted paths
+  const highlightedPaths = useMemo(() => {
+    if (!hoveredSubject) return new Set<string>()
+    
+    const set = new Set<string>()
+    for (const path of paths) {
+      if (path.subjectCode === hoveredSubject || path.prereqId === hoveredSubject) {
+        set.add(path.key)
+      }
     }
+    return set
+  }, [hoveredSubject, paths])
+
+  // Render empty SVG when no hover to avoid unmount/remount
+  if (!hoveredSubject) {
+    return (
+      <svg
+        className="absolute top-0 left-0 pointer-events-none opacity-0"
+        style={{ width: maxX, height: maxY }}
+      >
+        <defs>
+          <marker
+            id="arrowHighlight"
+            markerWidth="8"
+            markerHeight="6"
+            refX="7"
+            refY="3"
+            orient="auto"
+          >
+            <path d="M0,0 L8,3 L0,6 L1.5,3 Z" fill="#34d399" />
+          </marker>
+
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+      </svg>
+    )
   }
 
   return (
     <svg
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: maxX,
-        height: maxY,
-        pointerEvents: "none",
-        zIndex: 1,
-      }}
+      className="absolute top-0 left-0 pointer-events-none"
+      style={{ width: maxX, height: maxY }}
     >
       <defs>
-        {/* Marcador gris por defecto */}
-        <marker id="arrowhead-gray" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-          <polygon points="0 0, 8 3, 0 6" fill="#bdbdbd" />
+        {/* Arrow markers */}
+        <marker
+          id="arrowHighlight"
+          markerWidth="8"
+          markerHeight="6"
+          refX="7"
+          refY="3"
+          orient="auto"
+        >
+          <path d="M0,0 L8,3 L0,6 L1.5,3 Z" fill="#34d399" />
         </marker>
 
-        {/* Marcador azul para hover */}
-        <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-          <polygon points="0 0, 8 3, 0 6" fill="#1976d2" />
-        </marker>
       </defs>
 
-      {subjects.map((subject) => {
-        const subjectPos = nodePositions[subject.code]
-        if (!subjectPos) return null
+      {paths.map(({ key, pathData }) => {
+        // Only show lines related to hovered subject
+        const isHighlighted = highlightedPaths.has(key)
+        
+        // Explicit conditional rendering (Rule 6.7)
+        if (!isHighlighted) return null
+        
+        // Memoize styles to avoid recreation (Rule 7.1)
+        const glowPathStyle = {
+          pointerEvents: 'none' as const
+        }
+        
+        const mainPathStyle = {
+          pointerEvents: 'none' as const
+        }
+        
+        return (
+          <g key={key}>
+            {/* Glow layer */}
+            <path
+              d={pathData}
+              stroke="#34d399"
+              strokeWidth="6"
+              fill="none"
+              opacity="0.2"
+              markerEnd="url(#arrowHighlight)"
+              className="transition-opacity duration-100 ease-out"
+              style={glowPathStyle}
+            />
 
-        return subject.prerequisites.map((correlativaId) => {
-          const correlativaPos = nodePositions[correlativaId]
-          if (!correlativaPos) return null
-
-          // Determinar si esta conexión debe estar resaltada
-          const isHighlighted = hoveredSubject === subject.code || hoveredSubject === correlativaId
-
-          // Calcular puntos de conexión - DE MATERIA HACIA SU CORRELATIVA
-          const sourceX = subjectPos.x - 110 // Punto izquierdo de la materia que requiere
-          const sourceY = subjectPos.y
-          const targetX = correlativaPos.x + 110 // Punto derecho de la correlativa
-          const targetY = correlativaPos.y
-
-          // Verificar si la línea directa pasa por otros nodos
-          let pathData: string
-          let needsRouting = false
-          let routingOffset = 0
-
-          // Verificar colisiones con otros nodos
-          for (const otherSubject of subjects) {
-            if (otherSubject.code === subject.code || otherSubject.code === correlativaId) continue
-
-            const otherPos = nodePositions[otherSubject.code]
-            if (!otherPos) continue
-
-            const collision = avoidsNode(sourceX, sourceY, targetX, targetY, otherPos)
-            if (!collision.avoids) {
-              needsRouting = true
-              routingOffset =
-                Math.max(Math.abs(routingOffset), Math.abs(collision.offset)) * Math.sign(collision.offset)
-            }
-          }
-
-          if (needsRouting) {
-            // Crear ruta que evita obstáculos
-            const midX = (sourceX + targetX) / 2
-            const midY = (sourceY + targetY) / 2 + routingOffset
-
-            pathData = `M ${sourceX} ${sourceY} Q ${midX} ${midY} ${targetX} ${targetY}`
-          } else {
-            // Ruta directa con curva suave
-            const controlX1 = sourceX - 80
-            const controlX2 = targetX + 80
-
-            pathData = `M ${sourceX} ${sourceY} C ${controlX1} ${sourceY}, ${controlX2} ${targetY}, ${targetX} ${targetY}`
-          }
-
-          return (
-            <g key={`${correlativaId}-${subject.code}`} >
-              {/* Línea principal más discreta */}
-              <path
-                d={pathData}
-                stroke={isHighlighted ? "#10b981" : "#bdbdbd"}
-                
-                strokeWidth={isHighlighted ? "3" : "2"}
-                fill="none"
-                markerEnd={isHighlighted ? "url(#arrowhead-blue)" : "url(#arrowhead-gray)"}
-                strokeDasharray={isHighlighted ? "6,3" : "4,2"}
-                opacity={isHighlighted ? 1 : 0.6}
-                style={{
-                  animation: isHighlighted ? "dash 2s linear infinite" : "none",
-                  transition: "all 0.3s ease",
-                }}
-              />
-            </g>
-          )
-        })
+            {/* Main path - only visible when highlighted */}
+            <path
+              d={pathData}
+              stroke="#34d399"
+              strokeWidth="2.5"
+              fill="none"
+              strokeDasharray="6 3"
+              opacity="1"
+              markerEnd="url(#arrowHighlight)"
+              className="transition-all duration-100 ease-out"
+              style={mainPathStyle}
+            />
+          </g>
+        )
       })}
-
-      <style>
-        {`
-          @keyframes dash {
-            to {
-              stroke-dashoffset: -9;
-            }
-          }
-        `}
-      </style>
     </svg>
   )
-}
+})
+
+ConnectionLines.displayName = 'ConnectionLines'
 
 export default ConnectionLines
