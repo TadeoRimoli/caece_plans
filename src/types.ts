@@ -65,6 +65,7 @@ export interface Subject {
   status: SubjectStatus
   code: string
   extraConditions?: string
+  finalGrade?: number | null
 }
 
 export interface NodePosition {

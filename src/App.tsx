@@ -2,6 +2,7 @@ import { memo } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import Login from "./views/Login"
 import Plans from "./views/Plans"
+import NotFound from "./views/NotFound"
 import type { JSX } from "react"
 import { useAuth, AuthProvider } from "./AuthContext"
 
@@ -21,6 +22,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

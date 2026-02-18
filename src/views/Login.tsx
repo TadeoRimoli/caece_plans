@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback } from "react"
+import { memo, useMemo, useCallback, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { GraduationCap, BookOpen, BarChart3, Target, TrendingUp, Sparkles } from "lucide-react"
 import { loginWithGoogle, logout } from "../lib/firebase"
@@ -61,9 +61,15 @@ const AnimatedBackground = memo(function AnimatedBackground() {
   )
 })
 
+const PAGE_TITLE = "Visualizador de correlativas"
+
 function Login() {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
+
+  useEffect(() => {
+    document.title = PAGE_TITLE
+  }, [])
 
   // Memoize handlers to avoid recreations (Rule 5.5 - functional updates)
   const handleLogin = useCallback(async () => {
@@ -171,6 +177,9 @@ function Login() {
                 Cerrar Sesión
               </button>
             </div>
+            <p className="text-center text-xs text-slate-600 mt-6">
+              Desarrollado por Tadeo Rimoli
+            </p>
           </div>
         </div>
       </div>
@@ -209,7 +218,7 @@ function Login() {
             </div>
             
             <h1 className="text-3xl font-bold text-white mb-2">
-              Plataforma CAECE
+              Visualizador de correlativas
             </h1>
             <p className="text-slate-400">
               Tu compañero de estudios universitarios
@@ -265,6 +274,9 @@ function Login() {
           {/* Footer note */}
           <p className="text-center text-xs text-slate-500 mt-6">
             Al iniciar sesión, aceptas que tus datos se guarden de forma segura
+          </p>
+          <p className="text-center text-xs text-slate-600 mt-4">
+            Desarrollado por Tadeo Rimoli
           </p>
         </div>
       </div>
