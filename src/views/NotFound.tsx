@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 
 export default function NotFound() {
   useEffect(() => {
-    document.title = "Visualizador de correlativas - Página no encontrada"
+    document.title = "Visualizador de planes de estudio - Página no encontrada"
   }, [])
 
   return (
@@ -19,7 +19,15 @@ export default function NotFound() {
         Volver al inicio
       </Link>
       <p className="mt-10 text-xs text-slate-600">
-        Desarrollado por Tadeo Rimoli
+        Desarrollado por{" "}
+        <a
+          href="https://www.linkedin.com/in/tadeo-rimoli-9aa24b1a7/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-slate-700 hover:text-blue-500 underline underline-offset-2"
+        >
+          Tadeo Rimoli
+        </a>
       </p>
     </div>
   )

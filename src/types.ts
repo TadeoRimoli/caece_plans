@@ -57,13 +57,34 @@ export const STATUS_LIST = (Object.keys(STATUS_META) as SubjectStatus[]).map((k)
   icon: STATUS_META[k].icon
 }))
 
+export type SubjectType = "mandatory" | "elective" | "requirement"
+
+/**
+ * Indica si la materia tiene posición en la grilla (año definido).
+ * quadrimester puede ser null/0 para materias anuales (solo se agrupa por año).
+ */
+export function hasGridPosition(year: number | null | undefined, _quadrimester?: number | null): boolean {
+  const y = year ?? 0
+  return typeof y === "number" && y > 0
+}
+
+export function getSubjectType(subject: { type?: SubjectType }): SubjectType {
+  return subject.type === "elective" || subject.type === "requirement" ? subject.type : "mandatory"
+}
+
 export interface Subject {
   name: string
-  year: number
-  quadrimester: number
+  /** Año del plan (null o 0 = sin posición, ej. requisitos atemporales). */
+  year: number | null
+  /** Cuatrimestre (null o 0 = sin posición). */
+  quadrimester: number | null
   prerequisites: string[]
   status: SubjectStatus
   code: string
+  /** Tipo de materia: obligatoria, optativa/electiva o requisito extracurricular. Por defecto 'mandatory'. */
+  type?: SubjectType
+  /** Solo para type 'elective': agrupa con la regla en career.electiveRules. */
+  groupId?: string
   extraConditions?: string
   finalGrade?: number | null
 }
@@ -73,11 +94,40 @@ export interface NodePosition {
   y: number
 }
 
+export interface ElectiveRule {
+  groupId: string
+  requiredSubjects: number
+  availableSubjects: string[]
+}
+
+export interface ExtraRequirement {
+  /** Código de la materia a la que aplica el requisito extra (ej: final integrador). */
+  subjectCode: string
+  /** Cantidad mínima de materias aprobadas que se requieren para esta materia (ej: 25). */
+  minApprovedSubjects?: number
+}
+
 export interface Career {
   id: string
   name: string
+  /** Área de la carrera (ej. Ingeniería, Salud). Usado para filtrar por paso intermedio universidad → área → carreras. */
+  area?: string
   subjects: Subject[]
+  /** Reglas de optativas: por cada grupo, cuántas materias debe elegir el usuario y de cuáles. */
+  electiveRules?: ElectiveRule[]
+  /** Requisitos extra por materia (ej: finales que piden X materias aprobadas). */
+  extraRequirements?: ExtraRequirement[]
   plan: string
   icon: string
   year: number
+}
+
+export interface University {
+  id: string
+  acronym?: string
+  fullName?: string
+  location?: string
+  logoUrl?: string
+  type?: string
+  website?: string
 }

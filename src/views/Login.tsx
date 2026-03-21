@@ -61,7 +61,7 @@ const AnimatedBackground = memo(function AnimatedBackground() {
   )
 })
 
-const PAGE_TITLE = "Visualizador de correlativas"
+const PAGE_TITLE = "Visualizador de planes de estudio"
 
 function Login() {
   const navigate = useNavigate()
@@ -178,7 +178,15 @@ function Login() {
               </button>
             </div>
             <p className="text-center text-xs text-slate-600 mt-6">
-              Desarrollado por Tadeo Rimoli
+              Desarrollado por{" "}
+              <a
+                href="https://www.linkedin.com/in/tadeo-rimoli-9aa24b1a7/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-slate-700 hover:text-blue-500 underline underline-offset-2"
+              >
+                Tadeo Rimoli
+              </a>
             </p>
           </div>
         </div>
@@ -276,7 +284,15 @@ function Login() {
             Al iniciar sesión, aceptas que tus datos se guarden de forma segura
           </p>
           <p className="text-center text-xs text-slate-600 mt-4">
-            Desarrollado por Tadeo Rimoli
+            Desarrollado por{" "}
+            <a
+              href="https://www.linkedin.com/in/tadeo-rimoli-9aa24b1a7/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-slate-700 hover:text-blue-500 underline underline-offset-2"
+            >
+              Tadeo Rimoli
+            </a>
           </p>
         </div>
       </div>

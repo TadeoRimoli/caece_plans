@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react"
 import { BookOpen } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { NODE_WIDTH } from "../../../constants"
-import type { Subject } from "../../../types"
+import type { Subject, SubjectStatus } from "../../../types"
 import { STATUS_META } from "../../../types"
 
 interface SubjectNodeProps {
@@ -11,6 +11,11 @@ interface SubjectNodeProps {
   onClick: (subject: Subject) => void
   onHover?: (subjectId: string | null) => void
   hoveredSubjectId?: string | null
+  hoveredStatus?: SubjectStatus | null
+  /** Indica si el usuario ya cumple las correlativas / requisitos para cursar esta materia. */
+  isEligible?: boolean
+  /** Si es true, al no haber filtros se atenúa visualmente las materias pendientes que aún no se pueden cursar. */
+  highlightEligibleOnly?: boolean
 }
 
 export function SubjectNode({
@@ -19,6 +24,9 @@ export function SubjectNode({
   onClick,
   onHover,
   hoveredSubjectId: externalHoveredId,
+  hoveredStatus = null,
+  isEligible = false,
+  highlightEligibleOnly = false,
 }: SubjectNodeProps) {
   const hoveredSubjectId = externalHoveredId ?? null
 
@@ -42,18 +50,36 @@ export function SubjectNode({
 
   // Check if this node should be highlighted
   const isHighlighted = useMemo(() => {
-    if (!hoveredSubjectId) return true
-    if (subject.code === hoveredSubjectId) return true
-    if (subject.prerequisites.includes(hoveredSubjectId)) return true
-    
-    // Check if any subject requires this one
-    for (const s of allSubjects) {
-      if (s.prerequisites.includes(subject.code) && s.code === hoveredSubjectId) {
+    // 1) Hover por materia concreta
+    if (hoveredSubjectId) {
+      if (subject.code === hoveredSubjectId) return true
+      if (subject.prerequisites.includes(hoveredSubjectId)) return true
+
+      // Check if the hovered subject requires this one
+      const hoveredSubject = subjectMap.get(hoveredSubjectId)
+      if (hoveredSubject && hoveredSubject.prerequisites.includes(subject.code)) {
         return true
       }
+
+      return false
     }
-    return false
-  }, [hoveredSubjectId, subject.code, subject.prerequisites, allSubjects])
+
+    // 2) Hover por estado en el footer
+    if (hoveredStatus) {
+      return subject.status === hoveredStatus
+    }
+
+    // 3) Sin filtros:
+    //    - si highlightEligibleOnly=true: solo destacar materias pendientes que se pueden cursar
+    //    - si highlightEligibleOnly=false: todas con la misma opacidad
+    if (highlightEligibleOnly && subject.status === "pending") {
+      return isEligible
+    }
+    return true
+  }, [hoveredSubjectId, hoveredStatus, subject, subjectMap, isEligible, highlightEligibleOnly])
+
+  const isHovered = hoveredSubjectId === subject.code
+  const hasFilter = Boolean(hoveredSubjectId || hoveredStatus)
 
   const handleMouseEnter = useCallback(() => {
     if (onHover) {
@@ -78,41 +104,28 @@ export function SubjectNode({
   return (
     <div
       className={cn(
-        "relative",
+        "relative transition-opacity duration-150",
         isHighlighted ? "opacity-100" : "opacity-25"
       )}
       style={{ width: NODE_WIDTH }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Connection points */}
-      <div
-        className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full z-20"
-        style={{
-          backgroundColor: statusMeta.color,
-          boxShadow: `0 0 10px ${statusMeta.color}80`,
-        }}
-      />
-      <div
-        className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full z-20"
-        style={{
-          backgroundColor: statusMeta.color,
-          boxShadow: `0 0 10px ${statusMeta.color}80`,
-        }}
-      />
-
       {/* Main card */}
       <div
         onClick={handleCardClick}
         className={cn(
           "relative cursor-pointer rounded-2xl overflow-hidden border",
           "bg-gradient-to-br from-white/[0.08] to-white/[0.02]",
-          "transition-all duration-200",
-          "hover:scale-[1.02] hover:-translate-y-1 active:scale-[0.98]"
+          "transition-transform duration-150 ease-out",
+          hasFilter && isHighlighted && "scale-[1.05]",
+          isHovered && "scale-[1.05]"
         )}
         style={{
           borderColor: statusMeta.borderGlow,
-          boxShadow: `0 8px 32px rgba(0,0,0,0.3)`,
+          boxShadow: isHighlighted
+            ? `0 10px 40px rgba(0,0,0,0.45)`
+            : `0 6px 20px rgba(0,0,0,0.25)`,
         }}
       >
         {/* Glow overlay */}
@@ -125,8 +138,8 @@ export function SubjectNode({
           }}
         />
 
-        {/* Content */}
-        <div className="relative p-4 sm:p-5">
+          {/* Content */}
+        <div className="relative p-5 sm:p-6">
           {/* Status bar */}
           <div
             className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl"
@@ -140,18 +153,18 @@ export function SubjectNode({
 
           {/* Correlatives */}
           {correlativeNames.length > 0 && (
-            <div className="mt-3 space-y-1.5">
+            <div className="mt-4 space-y-2">
               {correlativeNames.slice(0, 2).map((name, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-2 text-xs sm:text-sm text-slate-300 bg-white/5 rounded-lg px-2 py-1"
+                  className="flex items-center gap-2 text-xs sm:text-sm text-slate-300 bg-white/5 rounded-lg px-2.5 py-1.5"
                 >
                   <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 text-blue-400" />
                   <span className="truncate font-medium">{name}</span>
                 </div>
               ))}
               {correlativeNames.length > 2 && (
-                <div className="text-xs sm:text-sm text-slate-400 text-center font-medium">
+                <div className="text-xs sm:text-sm text-slate-400 text-center font-medium pt-0.5">
                   +{correlativeNames.length - 2} más
                 </div>
               )}
@@ -160,14 +173,14 @@ export function SubjectNode({
 
           {/* Extra conditions */}
           {subject.extraConditions && (
-            <div className="mt-3 text-xs sm:text-sm text-amber-400 flex items-center gap-2 bg-amber-500/10 rounded-lg px-2 py-1.5">
+            <div className="mt-4 text-xs sm:text-sm text-amber-400 flex items-center gap-2 bg-amber-500/10 rounded-lg px-2.5 py-1.5">
               <span>⚡</span>
               <span className="truncate font-medium">{subject.extraConditions}</span>
             </div>
           )}
 
           {/* Status badge */}
-          <div className="mt-4 flex items-center justify-center">
+          <div className="mt-5 flex items-center justify-center">
             <div
               className="px-4 py-1.5 sm:py-2 rounded-full text-sm sm:text-base font-semibold flex items-center gap-2"
               style={{

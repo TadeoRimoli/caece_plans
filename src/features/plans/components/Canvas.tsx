@@ -1,7 +1,7 @@
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect, useMemo } from "react"
 import { cn } from "../../../lib/utils"
-import { NODE_WIDTH } from "../../../constants"
-import type { Subject, NodePosition } from "../../../types"
+import { NODE_WIDTH, COLUMN_GAP } from "../../../constants"
+import type { Subject, NodePosition, SubjectStatus } from "../../../types"
 import { ConnectionLines } from "./ConnectionLines"
 import { SubjectNode } from "./SubjectNode"
 import { useCanvas } from "../hooks/useCanvas"
@@ -11,6 +11,8 @@ interface CanvasProps {
   nodePositions: Record<string, NodePosition>
   columns: Array<{ key: string; year: number; quadrimester: number }>
   onSubjectClick: (subject: Subject) => void
+  hoveredStatus?: SubjectStatus | null
+  eligibleSubjectCodes?: string[]
 }
 
 export function Canvas({
@@ -18,9 +20,13 @@ export function Canvas({
   nodePositions,
   columns,
   onSubjectClick,
+  hoveredStatus,
+  eligibleSubjectCodes,
 }: CanvasProps) {
   const [hoveredSubjectId, setHoveredSubjectId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const eligibleSet = useMemo(() => new Set(eligibleSubjectCodes ?? []), [eligibleSubjectCodes])
+  const eligibilityEnabled = (eligibleSubjectCodes?.length ?? 0) > 0
   const {
     scale,
     position,
@@ -34,14 +40,21 @@ export function Canvas({
     handleTouchEnd,
   } = useCanvas()
 
+  // Registrar wheel con { passive: false } para poder llamar preventDefault sin warning
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    el.addEventListener("wheel", handleWheel, { passive: false })
+    return () => el.removeEventListener("wheel", handleWheel)
+  }, [handleWheel])
+
   return (
     <div
       ref={containerRef}
       className={cn(
-        "flex-1 relative overflow-hidden touch-none",
+        "flex-1 min-h-[300px] relative overflow-hidden touch-none",
         isDragging ? "cursor-grabbing" : "cursor-grab"
       )}
-      onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -62,31 +75,48 @@ export function Canvas({
         />
       </div>
 
-      {/* Content layer */}
+      {/* Content layer: tamaño mínimo para que zoom/pan tengan efecto aunque no haya nodos */}
       <div
-        className="relative w-fit h-fit"
+        className="relative w-fit h-fit min-w-[800px] min-h-[400px]"
         style={{
           transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
           transformOrigin: "0 0",
         }}
       >
         {/* Column headers */}
-        {columns.map((column, idx) => (
-          <div
-            key={column.key}
-            className="absolute text-center"
-            style={{ left: idx * 400, top: 40, width: NODE_WIDTH }}
-          >
-            <div className="inline-flex flex-col items-center gap-1 px-4 sm:px-6 py-2 sm:py-3 rounded-2xl bg-slate-900/95 border border-white/10">
-              <div className="flex items-center gap-2 text-white font-semibold text-xs sm:text-sm">
-                <span>{column.year}º Año</span>
-              </div>
-              <div className="text-[10px] sm:text-xs text-slate-400">
-                {column.quadrimester}º Cuatrimestre
+        {columns.map((column, idx) => {
+          const columnX = idx * COLUMN_GAP + 150
+          const isRequisitos = column.key === "requisitos"
+          return (
+            <div
+              key={column.key}
+              className="absolute text-center"
+              style={{ left: columnX - NODE_WIDTH / 2, top: 40, width: NODE_WIDTH }}
+            >
+              <div className="inline-flex flex-col items-center gap-1 px-4 sm:px-6 py-2 sm:py-3 rounded-2xl bg-slate-900/95 border border-white/10">
+                {isRequisitos ? (
+                  <>
+                    <div className="flex items-center gap-2 text-white font-semibold text-xs sm:text-sm">
+                      Requisitos para recibirse
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-slate-400">
+                      Idioma, prácticas, tesina
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-white font-semibold text-xs sm:text-sm">
+                      <span>{column.year} Año</span>
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-slate-400">
+                      {column.quadrimester === 0 ? "Anual" : `${column.quadrimester}º Cuatrimestre`}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {/* Connection lines */}
         <ConnectionLines
@@ -112,6 +142,9 @@ export function Canvas({
                 onClick={onSubjectClick}
                 onHover={setHoveredSubjectId}
                 hoveredSubjectId={hoveredSubjectId}
+                hoveredStatus={hoveredStatus}
+                isEligible={eligibilityEnabled && eligibleSet.has(subject.code)}
+                highlightEligibleOnly={eligibilityEnabled}
               />
             </div>
           )

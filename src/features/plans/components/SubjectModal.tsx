@@ -137,7 +137,11 @@ export function SubjectModal({
                   <Dialog.Description className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-slate-400 flex items-center gap-2">
                     <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
                     <span>
-                      {currentSubject.year}º año • {currentSubject.quadrimester}º cuatrimestre
+                      {currentSubject.year != null && currentSubject.year > 0
+                        ? (currentSubject.quadrimester != null && currentSubject.quadrimester > 0
+                          ? `${currentSubject.year} año • ${currentSubject.quadrimester}º cuatrimestre`
+                          : `${currentSubject.year} año • Anual`)
+                        : "Requisito extracurricular"}
                     </span>
                   </Dialog.Description>
                 </div>

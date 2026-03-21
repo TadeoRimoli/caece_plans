@@ -8,7 +8,10 @@ export interface CanvasState {
 
 const MIN_SCALE = 0.3
 const MAX_SCALE = 2
-const ZOOM_SENSITIVITY = 0.1
+/** Factor para zoom multiplicativo: más bajo = zoom más suave con la rueda */
+const ZOOM_FACTOR = 0.0003
+/** Sensibilidad reducida cuando es pinch (ctrlKey), para trackpads */
+const PINCH_ZOOM_FACTOR = 0.0005
 
 /**
  * Hook para manejar drag y zoom del canvas
@@ -22,13 +25,12 @@ export function useCanvas(initialScale = 1) {
   const dragStartRef = useRef({ x: 0, y: 0 })
   const rafRef = useRef<number | null>(null)
 
-  // Zoom con wheel
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  // Zoom con wheel: multiplicativo para sensibilidad estable en mouse y trackpad (pinch)
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault()
-    
-    const delta = e.deltaY > 0 ? -ZOOM_SENSITIVITY : ZOOM_SENSITIVITY
+    const factor = e.ctrlKey ? PINCH_ZOOM_FACTOR : ZOOM_FACTOR
     setScale((prev) => {
-      const newScale = prev + delta
+      const newScale = prev * (1 - e.deltaY * factor)
       return Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale))
     })
   }, [])

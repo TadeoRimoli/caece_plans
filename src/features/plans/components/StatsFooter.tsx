@@ -1,14 +1,15 @@
 import { useMemo } from "react"
 import { TrendingUp } from "lucide-react"
-import type { Subject } from "../../../types"
+import type { Subject, SubjectStatus } from "../../../types"
 import { STATUS_LIST, STATUS_META } from "../../../types"
 
 interface StatsFooterProps {
   subjects: Subject[]
   stats: { total: number; completed: number; percentage: number; averageGrade: number | null }
+  onStatusHover?: (status: SubjectStatus | null) => void
 }
 
-export function StatsFooter({ subjects, stats }: StatsFooterProps) {
+export function StatsFooter({ subjects, stats, onStatusHover }: StatsFooterProps) {
   const statusCounts = useMemo(() => {
     const counts = new Map<string, number>()
     
@@ -73,6 +74,8 @@ export function StatsFooter({ subjects, stats }: StatsFooterProps) {
             <div
               key={status.value}
               className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full transition-transform hover:scale-105"
+              onMouseEnter={() => onStatusHover?.(status.value as SubjectStatus)}
+              onMouseLeave={() => onStatusHover?.(null)}
               style={{
                 backgroundColor: `${status.meta.color}15`,
                 border: `1px solid ${status.meta.color}30`,
