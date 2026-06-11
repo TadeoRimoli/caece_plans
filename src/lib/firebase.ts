@@ -3,6 +3,8 @@ import {
   getAuth,
   getRedirectResult,
   GoogleAuthProvider,
+  setPersistence,
+  browserLocalPersistence,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -10,7 +12,6 @@ import {
 } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
 
-// Firebase configuration from environment variables
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -21,21 +22,34 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
+void setPersistence(auth, browserLocalPersistence)
+
 const provider = new GoogleAuthProvider()
 
-export const loginWithGoogle = async (useRedirect = false): Promise<User | null> => {
-  if (useRedirect) {
-    await signInWithRedirect(auth, provider)
-    return null
-  } else {
+const POPUP_FALLBACK_CODES = new Set([
+  "auth/popup-blocked",
+  "auth/popup-closed-by-user",
+  "auth/cancelled-popup-request",
+  "auth/operation-not-supported-in-this-environment",
+])
+
+/** Popup first (works on mobile when triggered by user click); redirect as fallback. */
+export const loginWithGoogle = async (): Promise<User | null> => {
+  try {
     const result = await signInWithPopup(auth, provider)
     return result.user
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code
+    if (code && POPUP_FALLBACK_CODES.has(code)) {
+      await signInWithRedirect(auth, provider)
+      return null
+    }
+    throw err
   }
 }
 

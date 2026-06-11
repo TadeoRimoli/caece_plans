@@ -14,17 +14,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (!firebaseUser) {
-        const redirectUser = await getRedirectUser()
-        setUser(redirectUser)
-      } else {
-        setUser(firebaseUser)
-      }
-      setLoading(false)
-    })
+    let cancelled = false
+    let unsubscribe: (() => void) | undefined
 
-    return () => unsubscribe()
+    async function initAuth() {
+      // Must resolve redirect before subscribing — otherwise onAuthStateChanged(null)
+      // can fire first and leave the user stuck on the login screen on mobile.
+      try {
+        const redirectUser = await getRedirectUser()
+        if (!cancelled && redirectUser) {
+          setUser(redirectUser)
+        }
+      } catch (err) {
+        console.error("Redirect auth error:", err)
+      }
+
+      if (cancelled) return
+
+      unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        if (!cancelled) {
+          setUser(firebaseUser)
+          setLoading(false)
+        }
+      })
+    }
+
+    void initAuth()
+
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+    }
   }, [])
 
   return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>

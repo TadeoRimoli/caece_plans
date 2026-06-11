@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { X, GraduationCap, Sparkles, Star } from "lucide-react"
+import { X, Search, Star } from "lucide-react"
 import { doc, getDoc, setDoc } from "firebase/firestore"
 import { cn } from "../../../lib/utils"
 import { db } from "../../../lib/firebase"
@@ -14,6 +14,78 @@ interface SidebarProps {
   userId: string
 }
 
+function CareerRow({
+  career,
+  isActive,
+  isFavorite,
+  onSelect,
+  onToggleFavorite,
+}: {
+  career: Career
+  isActive: boolean
+  isFavorite: boolean
+  onSelect: () => void
+  onToggleFavorite: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "group w-full text-left rounded-2xl px-4 py-4 transition-all duration-200",
+        "border active:scale-[0.99]",
+        isActive
+          ? "bg-white/[0.07] border-white/15"
+          : "bg-transparent border-transparent hover:bg-white/[0.04] hover:border-white/8"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "mt-1 h-2 w-2 flex-shrink-0 rounded-full transition-all",
+            isActive ? "bg-blue-400 shadow-[0_0_10px_#60a5fa]" : "bg-slate-600 group-hover:bg-slate-400"
+          )}
+        />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <span
+              className={cn(
+                "block text-[15px] sm:text-base font-semibold leading-snug tracking-tight",
+                isActive ? "text-white" : "text-slate-100 group-hover:text-white"
+              )}
+            >
+              {career.name}
+            </span>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                onToggleFavorite()
+              }}
+              className={cn(
+                "flex-shrink-0 rounded-lg p-1.5 transition-colors",
+                isFavorite
+                  ? "text-amber-400"
+                  : "text-slate-600 opacity-0 group-hover:opacity-100 hover:text-amber-400"
+              )}
+              aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+            >
+              <Star className={cn("h-4 w-4", isFavorite && "fill-current")} />
+            </button>
+          </div>
+
+          <p className="mt-1.5 text-sm text-slate-500">
+            {career.subjects.length} materias · Plan {career.plan}
+          </p>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export function Sidebar({
   open,
   careers,
@@ -24,6 +96,7 @@ export function Sidebar({
 }: SidebarProps) {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
   const [favoritesLoaded, setFavoritesLoaded] = useState(false)
+  const [search, setSearch] = useState("")
 
   useEffect(() => {
     const loadFavorites = async () => {
@@ -48,6 +121,9 @@ export function Sidebar({
       setFavoriteIds([])
       setFavoritesLoaded(false)
       void loadFavorites()
+    } else {
+      setFavoriteIds([])
+      setFavoritesLoaded(true)
     }
   }, [userId])
 
@@ -55,11 +131,7 @@ export function Sidebar({
     const saveFavorites = async () => {
       try {
         const userRef = doc(db, "users", userId)
-        await setDoc(
-          userRef,
-          { favoriteCareers: favoriteIds },
-          { merge: true }
-        )
+        await setDoc(userRef, { favoriteCareers: favoriteIds }, { merge: true })
       } catch (error) {
         console.error("Error saving favorite careers:", error)
       }
@@ -70,139 +142,167 @@ export function Sidebar({
     }
   }, [favoriteIds, userId, favoritesLoaded])
 
+  useEffect(() => {
+    if (!open) setSearch("")
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
   const toggleFavorite = (id: string) => {
     setFavoriteIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     )
   }
 
-  const orderedCareers = useMemo(() => {
-    if (!careers.length) return careers
-    return [...careers].sort((a, b) => {
+  const filteredCareers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const list = q
+      ? careers.filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.plan.toLowerCase().includes(q)
+        )
+      : careers
+
+    return [...list].sort((a, b) => {
       const aFav = favoriteIds.includes(a.id)
       const bFav = favoriteIds.includes(b.id)
-
-      if (aFav === bFav) {
-        return a.name.localeCompare(b.name)
-      }
-
-      return aFav ? -1 : 1
+      if (aFav !== bFav) return aFav ? -1 : 1
+      return a.name.localeCompare(b.name)
     })
-  }, [careers, favoriteIds])
+  }, [careers, favoriteIds, search])
+
+  const favoriteCareers = useMemo(
+    () => filteredCareers.filter((c) => favoriteIds.includes(c.id)),
+    [filteredCareers, favoriteIds]
+  )
+
+  const otherCareers = useMemo(
+    () => filteredCareers.filter((c) => !favoriteIds.includes(c.id)),
+    [filteredCareers, favoriteIds]
+  )
 
   if (!open) return null
+
+  const handleSelect = (career: Career) => {
+    onCareerSelect(career)
+    onClose()
+  }
 
   return (
     <>
       <div
         onClick={onClose}
-        className="fixed inset-0 bg-black/60 z-40 animate-fadeIn"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fadeIn"
+        aria-hidden
       />
-      <aside className="fixed left-0 top-0 h-full w-72 sm:w-80 bg-slate-900/98 border-r border-white/5 z-50 animate-slideInLeft flex flex-col">
-        <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <GraduationCap className="w-6 h-6 text-blue-400" />
-            <h2 className="text-lg font-bold text-white">CAECE</h2>
+
+      <aside
+        className={cn(
+          "fixed left-0 top-0 h-full z-50 flex flex-col",
+          "w-[min(100vw,360px)] sm:w-[400px]",
+          "bg-slate-950/98 border-r border-white/8",
+          "animate-slideInLeft",
+          "pb-[env(safe-area-inset-bottom)]"
+        )}
+      >
+        <div className="px-5 pt-6 pb-5 border-b border-white/6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white tracking-tight">
+                Carreras
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {careers.length} disponibles
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-xl p-2 text-slate-500 hover:bg-white/5 hover:text-white transition-colors"
+              aria-label="Cerrar menú"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="relative mt-5">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar..."
+              className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/[0.04] border border-white/8 text-[15px] text-white placeholder:text-slate-500 focus:outline-none focus:border-white/20 transition-colors"
+            />
+          </div>
         </div>
 
-        <div className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-3 px-2">
-            Carreras disponibles
-          </p>
-          {orderedCareers.map((career) => {
-            const isActive = currentCareer?.id === career.id
-            const isFavorite = favoriteIds.includes(career.id)
-            return (
-              <div
-                key={career.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  onCareerSelect(career)
-                  onClose()
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    onCareerSelect(career)
-                    onClose()
-                  }
-                }}
-                className={cn(
-                  "w-full p-3 sm:p-4 rounded-xl text-left transition-all duration-200 cursor-pointer",
-                  isActive
-                    ? "bg-white/10 border border-white/10"
-                    : "hover:bg-white/5 border border-transparent"
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="text-xl sm:text-2xl bg-white/5 rounded-lg p-2">
-                    {career.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3
-                      className={cn(
-                        "font-medium text-white text-sm sm:text-base truncate",
-                        isActive && "text-blue-400"
-                      )}
-                    >
-                      {career.name}
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {career.subjects.length} materias • {career.year}º año • Plan {career.plan}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    {isActive && (
-                      <Sparkles className="w-4 h-4 text-blue-400" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        toggleFavorite(career.id)
-                      }}
-                      className={cn(
-                        "p-1 rounded-full border border-transparent transition-colors",
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-3">
+          {filteredCareers.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-12">
+              No se encontraron carreras
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {favoriteCareers.length > 0 && (
+                <section>
+                  <p className="px-3 mb-2 text-xs font-medium text-slate-500">
+                    Favoritas
+                  </p>
+                  <div className="space-y-1">
+                    {favoriteCareers.map((career) => (
+                      <CareerRow
+                        key={career.id}
+                        career={career}
+                        isActive={currentCareer?.id === career.id}
                         isFavorite
-                          ? "text-yellow-400 border-yellow-400/40 bg-yellow-400/10"
-                          : "text-slate-500 hover:text-yellow-400 hover:bg-white/5"
-                      )}
-                      aria-label={
-                        isFavorite
-                          ? "Quitar carrera de favoritos"
-                          : "Marcar carrera como favorita"
-                      }
-                    >
-                      <Star
-                        className={cn(
-                          "w-4 h-4",
-                          isFavorite ? "fill-yellow-400" : "fill-transparent"
-                        )}
+                        onSelect={() => handleSelect(career)}
+                        onToggleFavorite={() => toggleFavorite(career.id)}
                       />
-                    </button>
+                    ))}
                   </div>
-                </div>
-              </div>
-            )
-          })}
+                </section>
+              )}
+
+              {otherCareers.length > 0 && (
+                <section>
+                  {favoriteCareers.length > 0 && (
+                    <p className="px-3 mb-2 text-xs font-medium text-slate-500">
+                      Todas
+                    </p>
+                  )}
+                  <div className="space-y-1">
+                    {otherCareers.map((career) => (
+                      <CareerRow
+                        key={career.id}
+                        career={career}
+                        isActive={currentCareer?.id === career.id}
+                        isFavorite={false}
+                        onSelect={() => handleSelect(career)}
+                        onToggleFavorite={() => toggleFavorite(career.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="p-3 border-t border-white/5 text-[10px] text-slate-500 text-center">
+        <div className="px-5 py-4 border-t border-white/6 text-xs text-slate-600 text-center">
           Desarrollado por{" "}
           <a
             href="https://www.linkedin.com/in/tadeo-rimoli-9aa24b1a7/"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-slate-300 hover:text-blue-400 underline underline-offset-2"
+            className="text-slate-400 hover:text-white transition-colors"
           >
             Tadeo Rimoli
           </a>

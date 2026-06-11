@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
-import { X, BookOpen, Calendar, Clock, Star, Trophy } from "lucide-react"
-import { STATUS_LIST, STATUS_META, type Subject, type SubjectStatus } from "../../../types"
+import { X, BookOpen, Calendar } from "lucide-react"
+import { STATUS_META, type Subject, type SubjectStatus } from "../../../types"
 import { cn } from "../../../lib/utils"
+import { StatusSelector, STATUS_HEADER_ICONS } from "./StatusSelector"
 
 interface SubjectModalProps {
   open: boolean
@@ -11,14 +12,6 @@ interface SubjectModalProps {
   onClose: () => void
   onStatusChange: (subjectId: string, status: SubjectStatus) => void
   onFinalGradeChange?: (subjectId: string, grade: number | null) => void
-}
-
-const statusIcons: Record<SubjectStatus, React.ReactNode> = {
-  pending: <Clock className="w-4 h-4 sm:w-5 sm:h-5" />,
-  in_progress: <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />,
-  course_completed: <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />,
-  promoted: <Star className="w-4 h-4 sm:w-5 sm:h-5" />,
-  approved_with_final: <Trophy className="w-4 h-4 sm:w-5 sm:h-5" />,
 }
 
 export function SubjectModal({
@@ -91,6 +84,7 @@ export function SubjectModal({
   if (!currentSubject) return null
 
   const statusMeta = STATUS_META[currentSubject.status]
+  const StatusIcon = STATUS_HEADER_ICONS[currentSubject.status]
 
   return (
     <Dialog.Root open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -156,14 +150,14 @@ export function SubjectModal({
               {/* Current status */}
               <div className="mt-3 sm:mt-4">
                 <div
-                  className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-medium"
                   style={{
-                    backgroundColor: `${statusMeta.color}20`,
+                    backgroundColor: `${statusMeta.color}18`,
                     color: statusMeta.color,
-                    border: `1px solid ${statusMeta.color}40`,
+                    border: `1px solid ${statusMeta.color}35`,
                   }}
                 >
-                  {statusIcons[currentSubject.status]}
+                  <StatusIcon className="w-4 h-4" strokeWidth={2.25} />
                   <span>{statusMeta.label}</span>
                 </div>
               </div>
@@ -173,46 +167,13 @@ export function SubjectModal({
             <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">
               {/* Status selector */}
               <div>
-                <h4 className="text-xs sm:text-sm font-medium text-slate-300 mb-2 sm:mb-3">
+                <h4 className="text-sm font-medium text-slate-300 mb-3">
                   Cambiar estado
                 </h4>
-                <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
-                  {STATUS_LIST.map((status) => {
-                    const meta = STATUS_META[status.value]
-                    const isActive = currentSubject.status === status.value
-                    return (
-                      <button
-                        key={status.value}
-                        onClick={() => handleStatusChange(status.value)}
-                        className={cn(
-                          "relative flex flex-col items-center gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-lg sm:rounded-xl",
-                          "transition-all duration-150 border active:scale-95",
-                          isActive
-                            ? "bg-white/10 ring-2 ring-offset-2 ring-offset-slate-900"
-                            : "bg-white/[0.02] hover:bg-white/[0.05]",
-                        )}
-                        style={{
-                          borderColor: isActive ? meta.color : "rgba(255,255,255,0.1)",
-                          boxShadow: isActive ? `0 0 15px ${meta.color}25` : "none",
-                        }}
-                      >
-                        <div
-                          className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-transform duration-150"
-                          style={{
-                            backgroundColor: meta.color,
-                            boxShadow: `0 0 10px ${meta.color}40`,
-                            transform: isActive ? "scale(1.1)" : "scale(1)",
-                          }}
-                        >
-                          <span className="text-white text-[10px] sm:text-sm">{status.icon}</span>
-                        </div>
-                        <span className="text-[8px] sm:text-[10px] text-slate-400 text-center leading-tight">
-                          {status.label}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
+                <StatusSelector
+                  currentStatus={currentSubject.status}
+                  onChange={handleStatusChange}
+                />
               </div>
 
               {/* Final grade (optional) */}

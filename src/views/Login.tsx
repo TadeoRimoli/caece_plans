@@ -1,9 +1,9 @@
-import { memo, useMemo, useCallback, useEffect } from "react"
+import { memo, useMemo, useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { GraduationCap, BookOpen, BarChart3, Target, TrendingUp, Sparkles } from "lucide-react"
 import { loginWithGoogle, logout } from "../lib/firebase"
 import { useAuth } from "../AuthContext"
-import { isMobileDevice, cn } from "../lib/utils"
+import { cn } from "../lib/utils"
 
 // Hoist static Google SVG icon (Rule 6.3)
 const GoogleIcon = (
@@ -66,18 +66,37 @@ const PAGE_TITLE = "Visualizador de planes de estudio"
 function Login() {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [loggingIn, setLoggingIn] = useState(false)
 
   useEffect(() => {
     document.title = PAGE_TITLE
   }, [])
 
+  // Auto-navigate to "/" after a successful redirect login (mobile flow).
+  // signInWithRedirect causes a full page reload back to /login,
+  // so navigate() from handleLogin never runs.
+  useEffect(() => {
+    if (user && !loading) {
+      navigate("/", { replace: true })
+    }
+  }, [user, loading, navigate])
+
   // Memoize handlers to avoid recreations (Rule 5.5 - functional updates)
   const handleLogin = useCallback(async () => {
+    setLoginError(null)
+    setLoggingIn(true)
     try {
-      await loginWithGoogle(isMobileDevice())
-      navigate("/", { replace: true })
+      const loggedUser = await loginWithGoogle()
+      // Redirect flow leaves the page — navigate only when popup succeeds.
+      if (loggedUser) {
+        navigate("/", { replace: true })
+      }
     } catch (err) {
       console.error("Error al loguearse:", err)
+      setLoginError("No se pudo iniciar sesión. Intentá de nuevo.")
+    } finally {
+      setLoggingIn(false)
     }
   }, [navigate])
 
@@ -254,10 +273,14 @@ function Login() {
             </ul>
           </div>
 
+          {loginError ? (
+            <p className="mb-4 text-sm text-red-400 text-center px-2">{loginError}</p>
+          ) : null}
+
           {/* Login button */}
           <button
             onClick={handleLogin}
-            disabled={loading}
+            disabled={loading || loggingIn}
             className={cn(
               "w-full py-4 px-6 rounded-2xl font-semibold",
               "bg-white/[0.05] hover:bg-white/[0.08]",
@@ -269,7 +292,7 @@ function Login() {
               "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
           >
-            {loading ? (
+            {loading || loggingIn ? (
               <div className="w-5 h-5 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
             ) : (
               <>
